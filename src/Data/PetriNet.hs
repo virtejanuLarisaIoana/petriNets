@@ -1,22 +1,27 @@
-module Nets where
+module Data.PetriNet where
 import Data.Maybe
 import Data.ByteString (group)
 import Text.Read (Lexeme(String))
+
 type Place = String 
 type Transition = String
 
 data Token = Token {numberT :: Int, typeT :: String} 
-    deriving (Show)
+    deriving (Show, Eq)
+
+newtype Tokens = Tokens [Token]
+    deriving(Show, Eq)
+-- type Tokens = Map String Int
 
 data InputArc =  InputArc {placeI :: Place, 
                             transitionI :: Transition, 
-                            tokenI :: [Token]} 
-    deriving (Show)
+                            tokenI :: Tokens} 
+    deriving (Show, Eq)
 
 data OutputArc = OutputArc {transitionO :: Transition, 
                             placeO :: Place,   
-                            tokenO :: [Token]}
-    deriving (Show)
+                            tokenO :: Tokens}
+    deriving (Show, Eq)
 
 
 data PetriNet = PetriNet {
@@ -24,33 +29,10 @@ data PetriNet = PetriNet {
     transitions :: [Transition], 
     inputArcs :: [InputArc], --minusW = preset
     outputArcs :: [OutputArc], --plusW = postset 
-    marking :: [(Place, [Token])]--list of tokens as we can have multiple types of tokens, different numbers
-} deriving (Show)
+    marking :: [(Place, Tokens)]--list of tokens as we can have multiple types of tokens, different numbers
+} deriving (Show, Eq)
 
 
-testNet :: PetriNet
-testNet = PetriNet {
-    places = ["P1", "P2", "P3", "P4", "P5"], 
-    transitions = ["T1", "T2"],
-    inputArcs = [
-        InputArc {placeI = "P1", transitionI = "T1", tokenI = [ Token 2 "x" ]},
-        InputArc {placeI = "P2", transitionI = "T1", tokenI = [ Token 1 "x" , Token 2 "y" ]},
-        InputArc {placeI = "P3", transitionI = "T2", tokenI = [ Token 1 "y"]}
-    ],
-    outputArcs = [
-        OutputArc { transitionO = "T1", placeO = "P3", tokenO = [Token 3 "x"]},
-        OutputArc { transitionO = "T2", placeO = "P4", tokenO = [Token 1 "x"]},
-        OutputArc { transitionO = "T2", placeO = "P5", tokenO = [Token 1 "y"]}
-    ],
-    marking = [
-        ("P1", [Token 1 "x"]),
-        ("P2", [Token 1 "x", Token 2 "y", Token 1 "z"]),
-        ("P3", []),
-        ("P4", []),
-        ("P5", [])
-    ]
-
-}
 
 --we are checking if a specific transtion is enabled 
 --we have an input arc from P1 to T1 that carries x number of tokens of type y. => we check if P1 holds enough token of the needed types in the present marking
@@ -66,18 +48,18 @@ isEnabled (PetriNet places tranz inputArcs outArcs marking) t = if t `elem` tran
         -- InputArcs=[(p1, t1, [2x, 1y]), (p2, t1, [1x])]// marking = [(p1, [2x, 1z]), (p3, [3y, 1z])]
         go :: [InputArc] -> Bool                         
         go [] = True                                     
-        go (arc : arcs) = tokensSatisfied (tokenI arc) (fromMaybe [] (lookup (placeI arc) marking) ) && go arcs 
+        go (arc : arcs) = tokensSatisfied (tokenI arc) (fromMaybe (Tokens []) (lookup (placeI arc) marking) ) && go arcs 
 
 
 -- Returns true like
 --    x = [(3, foo), (4, bar)]
 --    y = [(16, foo), ( 4, bar), (10, baz)]
 --  tokensSatisfied x y == true
-tokensSatisfied :: [Token] -> [Token] -> Bool
-tokensSatisfied [] _ = True
-tokensSatisfied (current : needed) theOtherTokens = 
+tokensSatisfied :: Tokens -> Tokens -> Bool
+tokensSatisfied (Tokens []) _ = True
+tokensSatisfied (Tokens (current : needed)) (Tokens theOtherTokens) = 
     numberT current <= fromMaybe 0 (lookup (typeT current) (map (\t -> (typeT t, numberT t)) theOtherTokens))
-    && tokensSatisfied needed theOtherTokens
+    && tokensSatisfied (Tokens needed) (Tokens theOtherTokens)
 
 --list of enabled transitions 
 enabledTransitions :: PetriNet -> [Transition]
@@ -87,12 +69,13 @@ enabledTransitions net@(PetriNet places tranz inputArcs outArcs marking) =
         Just True -> True
         Nothing -> False]
 
+-- | The list of arcs that connect the transition to its preset
+preSetArcs :: PetriNet -> Transition -> [InputArc] 
+preSetArcs net@(PetriNet places tranz inputArcs outArcs marking) t = [arc | arc <- inputArcs, transitionI arc == t, t `elem` tranz ]
 
-preSet :: PetriNet -> Transition -> [InputArc] 
-preSet net@(PetriNet places tranz inputArcs outArcs marking) t = [arc | arc <- inputArcs, transitionI arc == t, t `elem` tranz ]
-
-postSet ::PetriNet -> Transition -> [OutputArc]
-postSet net@(PetriNet places tranz inputArcs outArcs marking) t = [arc | arc <- outArcs, transitionO arc == t, t `elem` tranz ]
+-- | The list of arcs that connect the transition to its postset
+postSetArcs ::PetriNet -> Transition -> [OutputArc]
+postSetArcs net@(PetriNet places tranz inputArcs outArcs marking) t = [arc | arc <- outArcs, transitionO arc == t, t `elem` tranz ]
 
 {-}
 fireTransition :: PetriNet -> Transition -> Maybe PetriNet
@@ -102,16 +85,37 @@ fireTransition net@(PetriNet places tranz inputArcs outArcs marking) t =
         _ -> Nothing 
     where 
         go t = 
+
 -}
-    
+
+{-
 deleteTokensPreset :: PetriNet -> Transition -> PetriNet
-deleteTokensPreset net@(PetriNet places tranz inputArcs outputArcs marking) t = go (preSet net t) marking 
-    where 
-        go :: [InputArc] -> [(Place, [Token])] ->  PetriNet
-        go [] currentMarking = PetriNet places tranz inputArcs outputArcs currentMarking  
-        go (currentArc : rest) currentMarking = 
+deleteTokensPreset net@(PetriNet places tranz inputArcs outputArcs marking) t = 
+    foldl' f marking (presetArcs net t)
+    where
+        f :: [(Place, Tokens)] -> InputArc -> [(Place, Tokens)]
+        f marking' (InputArc placeI transitionI tokenI) = 
+            foldl' f' [] marking' 
+          where 
+            f' :: [(Place, Tokens)] -> [(Place, Tokens)] -> [(Place, Tokens)]
+            f' m1 m2 = if 
+
+-}
+
+
+
+{-
+
+
+
             let
-                newMarking :: [(Place, [Token])]
+                listOfRequiredTokend = tokenI currentArc
+                newMarking :: [(Place, Tokens )]
                 newMarking = 
             in
-                go rest newMarking
+                go =
+
+    
+--fire transition=> delete the required tokens from the initial place 
+-- => put enough tokens in the places that the output arcs end in
+    -}

@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:PetriNets"
+
+    - path: "test"
+      component: "PetriNets:test:PetriNets-test"
