@@ -91,4 +91,5 @@ test-suite PetriNets-test
         , base ^>=4.17.2.1
         , tasty
         , tasty-hunit
+        , containers
         , bytestring
