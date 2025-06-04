@@ -56,7 +56,7 @@ enabledTransitionTests = testGroup "Enabled Transition Tests" [
     ]
 
 firingTests :: TestTree
-firingTests = testGroup "Firing Transitions Tests" [ tokenDelitionTests, 
+firingTests = testGroup "Firing Transitions Tests" [ tokenDelitionTests, tokenAdditionTests,
     testCase "Atomic Net T1 Fired" $ fireTransition testNet0 "T1" @?= Just testNet0fired, 
     testCase "Simple Net T1 Fired" $ fireTransition testNet1 "T1" @?= Just testNet1 { marking = Marking $ Map.fromList [
         ("P1", Tokens $ Map.fromList [("x",1)]), 
@@ -75,7 +75,7 @@ firingTests = testGroup "Firing Transitions Tests" [ tokenDelitionTests,
     ]
 
 tokenDelitionTests :: TestTree 
-tokenDelitionTests = testGroup "Token deletion tests" [singleTokenSubstraction, listOfTokensSubstraction, tokensSubstractedFromAnArc, tokensSubstractedFromListOfArcs, fullTokenSubstractionFiredTransition]
+tokenDelitionTests = testGroup "Token deletion tests" [singleTokenSubstraction, listOfTokensSubstraction, markingTokensSubstractTests, tokensSubstractedFromAnArc, tokensSubstractedFromListOfArcs, fullTokenSubstractionFiredTransition]
 
 singleTokenSubstraction :: TestTree 
 singleTokenSubstraction = testGroup "Substract single token of a type" [
@@ -89,9 +89,14 @@ listOfTokensSubstraction = testGroup "Substract the corresponding tokens from tw
     --needs the false test
     ]
 
-tokensSubstractedFromAnArc :: TestTree 
-tokensSubstractedFromAnArc = testGroup "Substract a set of tokens from a given place from a marking" [
+markingTokensSubstractTests :: TestTree 
+markingTokensSubstractTests = testGroup "Substract a set of tokens from a given marking at a given place"[
     testCase "Atomic net" $ markingTokensSubtract (marking testNet0) "P1" (Tokens ( Map.fromList[("x",1)])) @?= Marking (Map.fromList[("P1", Tokens $ Map.fromList[]),("P2", Tokens $ Map.fromList[])])
+    ]
+
+tokensSubstractedFromAnArc :: TestTree 
+tokensSubstractedFromAnArc = testGroup "Substract a set of tokens from a marking given an Input Arc" [
+    testCase "Atomic net" $ markingInputArcSubtract (marking testNet0) (InputArc {placeI = "P1", transitionI = "T1", tokenI = Tokens (Map.fromList[("x",1)])}) @?= Marking (Map.fromList[("P1", Tokens $ Map.fromList[]),("P2", Tokens $ Map.fromList[])])
     --needs the rest cases
     ]
 tokensSubstractedFromListOfArcs :: TestTree 
@@ -103,4 +108,73 @@ tokensSubstractedFromListOfArcs = testGroup "Substract tokens and update marking
 fullTokenSubstractionFiredTransition :: TestTree 
 fullTokenSubstractionFiredTransition = testGroup "Delete corresponding tokens for firing" [
     testCase "Atomic net" $ transitionPresetSubtract testNet0 "T1" @?= testNet0{marking = Marking (Map.fromList[("P1", Tokens $ Map.fromList[]),("P2", Tokens $ Map.fromList[])])}
+    ]
+
+tokenAdditionTests :: TestTree
+tokenAdditionTests = testGroup "Tokens addition tests" [ singleTokenAdditionTest, tokenListAddition, markingTokensAdditionTests, tokenAdditionFromAnOutputArc, tokenAdditionFromListOfArcs, fullTokenAdditionFiredTransition]
+
+singleTokenAdditionTest :: TestTree
+singleTokenAdditionTest = testGroup "Single token addition" [
+    testCase "Generic token addition" $ singleTokenAddition "foo" 2 genericTestToken1 @?= Tokens (Map.fromList [("foo", 5), ("bar", 4)])
+    ]
+
+tokenListAddition :: TestTree
+tokenListAddition = testGroup "Adding corresponding tokens from two <<lists>>" [
+    testCase "Generic tokens-tokens addition" $ multipleTokensAddition genericTestToken1 genericTestToken2 @?= Tokens ( Map.fromList [("foo", 13), ("bar", 8), ("baz", 10)])
+    ]
+
+markingTokensAdditionTests :: TestTree 
+markingTokensAdditionTests = testGroup "Add a set of tokens from a given place from a marking" [
+    testCase "Atomic net" $ markingTokensAddition (marking testNet0) "P2" (Tokens ( Map.fromList[("x",1)])) @?= Marking (Map.fromList[("P1", Tokens $ Map.fromList[("x",1)]),("P2", Tokens $ Map.fromList[("x",1)])])
+    --needs the rest cases
+    ]
+
+tokenAdditionFromAnOutputArc :: TestTree
+tokenAdditionFromAnOutputArc = testGroup "Adds a set of tokens from a given Output Arc to the marking" [
+    testCase "Atomic net" $ markingOutputArcAddition (marking testNet0) OutputArc {transitionO = "T1", placeO = "P2", tokenO = Tokens $ Map.fromList[("x",1)]} @?= Marking (Map.fromList[("P1", Tokens $ Map.fromList[("x",1)]),("P2", Tokens $ Map.fromList[("x",1)])]),
+    testCase "Simple Net fst output arc" $ markingOutputArcAddition (marking testNet1) OutputArc { transitionO = "T1", placeO = "P3", tokenO = Tokens $ Map.fromList[("x",3)]} @?= Marking ( Map.fromList[
+        ("P1", Tokens $ Map.fromList[("x",3)]),
+        ("P2", Tokens $ Map.fromList[("x",1), ("y", 2), ("z",1)]),
+        ("P3", Tokens $ Map.fromList[("x", 3)]),
+        ("P4", Tokens $ Map.fromList[]),
+        ("P5", Tokens $ Map.fromList[])
+    ]),
+    testCase "Simple Net 2nd output arc" $ markingOutputArcAddition (marking testNet1) OutputArc { transitionO = "T2", placeO = "P4", tokenO = Tokens $ Map.fromList[("x",1)]} @?= Marking ( Map.fromList[
+        ("P1", Tokens $ Map.fromList[("x",3)]),
+        ("P2", Tokens $ Map.fromList[("x",1), ("y", 2), ("z",1)]),
+        ("P3", Tokens $ Map.fromList[]),
+        ("P4", Tokens $ Map.fromList[("x",1)]),
+        ("P5", Tokens $ Map.fromList[])
+    ])
+    ]
+
+tokenAdditionFromListOfArcs :: TestTree
+tokenAdditionFromListOfArcs = testGroup "Add tokens and update marking for a list of arcs" [
+    testCase "Atomic net" $ markingOutputArcsListAddition (marking testNet0) (outputArcs testNet0) @?= Marking (Map.fromList[("P1", Tokens $ Map.fromList[("x",1)]),("P2", Tokens $ Map.fromList[("x",1)])]),
+    testCase "Simple net" $ markingOutputArcsListAddition (marking testNet1) (outputArcs testNet1) @?= Marking(Map.fromList[
+        ("P1", Tokens $ Map.fromList[("x",3)]),
+        ("P2", Tokens $ Map.fromList[("x",1), ("y", 2), ("z",1)]),
+        ("P3", Tokens $ Map.fromList[("x", 3)]),
+        ("P4", Tokens $ Map.fromList[("x",1)]),
+        ("P5", Tokens $ Map.fromList[("y", 1)])])
+    ]
+
+fullTokenAdditionFiredTransition :: TestTree 
+fullTokenAdditionFiredTransition = testGroup "Add coresponding tokens for firing" [
+    testCase "Atomic net" $ transitionPostSetAddition testNet0 "T1" @?= testNet0{marking = Marking $ Map.fromList [
+        ("P1", Tokens $ Map.fromList[("x",1)]),
+        ("P2", Tokens $ Map.fromList[("x",1)])
+        ]},
+    testCase "Simple net T1 fired" $ transitionPostSetAddition testNet1 "T1" @?= testNet1{ marking = Marking $ Map.fromList[
+        ("P1", Tokens $ Map.fromList[("x",3)]),
+        ("P2", Tokens $ Map.fromList[("x",1), ("y", 2), ("z",1)]),
+        ("P3", Tokens $ Map.fromList[("x", 3)]),
+        ("P4", Tokens $ Map.fromList[]),
+        ("P5", Tokens $ Map.fromList[])]},
+    testCase "Simple net T2 fired" $ transitionPostSetAddition testNet1 "T2" @?= testNet1{ marking = Marking $ Map.fromList[
+        ("P1", Tokens $ Map.fromList[("x",3)]),
+        ("P2", Tokens $ Map.fromList[("x",1), ("y", 2), ("z",1)]),
+        ("P3", Tokens $ Map.fromList[]),
+        ("P4", Tokens $ Map.fromList[("x", 1)]),
+        ("P5", Tokens $ Map.fromList[("y", 1)])]}
     ]

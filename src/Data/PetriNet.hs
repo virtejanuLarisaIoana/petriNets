@@ -94,15 +94,11 @@ postSetArcs net@(PetriNet places tranz inputArcs outArcs marking) t = [arc | arc
 
 
 fireTransition :: PetriNet -> Transition -> Maybe PetriNet
-fireTransition net@(PetriNet places tranz inputArcs outArcs marking) t = undefined
-{-
+fireTransition net@(PetriNet places tranz inputArcs outArcs marking) t =
     case isEnabled net t of
-        Just True -> go 
+        Just True -> Just (transitionPostSetAddition (transitionPresetSubtract net t) t) 
         _ -> Nothing 
-    where 
-        go t = 
 
--}                    
 
 -- | Deletes the single token type and amount from the map
 -- This is a fold function for Map.foldrWithKey'
@@ -164,41 +160,44 @@ transitionPresetSubtract net@(PetriNet {marking = oldMarking}) t =
     { marking = 
         markingInputArcListSubtract oldMarking (preSetArcs net t)}
 
--- fold over all preset arcs
--- fold over all tokens in each arc
+singleTokenAddition :: String -> Integer -> Tokens ->Tokens
+singleTokenAddition tokenType tokenDelta (Tokens currentToken) = Tokens (
+--insertWith :: Ord k => (a -> a -> a) -> k -> a -> Map k a -> Map k a
+    Map.insertWith 
+    (+) 
+    tokenType 
+    tokenDelta
+    currentToken)
 
+-- | Adds one set of tokens to the corresponding spots in another set of tokens 
+--it is going to be f a b => a is added over be
+--Ex: [("foo", 2), ("bar", 1)] `multipleTokensAddition` [("foo", 1), ("baz", 10)] == [("foo", 3), ("bar", 1), ("baz", 10)]
+multipleTokensAddition :: Tokens -> Tokens ->  Tokens 
+multipleTokensAddition deltaTokens (Tokens currentTokens) = 
+    Map.foldrWithKey' singleTokenAddition deltaTokens currentTokens
 
--- foldl' :: (Map Place Tokens -> InputArc -> Map Place Tokens) -> Map Place Tokens -> [InputArc] -> Map Place Tokens 
-{-_
+-- | Adds a set of tokens in a given place in a given marking
+-- When the key aka the place is not a member of the map, the original map is returned
+markingTokensAddition :: Marking -> Place -> Tokens -> Marking
+markingTokensAddition (Marking givenMarking) place deltaTokens = Marking $
+    Map.adjust 
+        (\currentTokens -> deltaTokens `multipleTokensAddition` currentTokens)
+        place 
+        givenMarking 
 
+markingOutputArcAddition :: Marking -> OutputArc -> Marking 
+markingOutputArcAddition marking (OutputArc _trans place deltaTokens) = markingTokensAddition marking place deltaTokens
 
+-- foldl' :: (b -> a -> b) -> b -> t a -> b
+-- a ~ OutputArc
+-- t ~ []
+-- b ~ Marking
+-- foldl' specialized :: (Marking -> OutputArc -> Marking) -> Marking -> [OutputArc] -> Marking
+markingOutputArcsListAddition :: Marking -> [OutputArc] -> Marking
+markingOutputArcsListAddition givenMarking arcs = foldl' markingOutputArcAddition givenMarking arcs
 
-
-    foldl' f marking (presetArcs net t)
-    where
-        f :: [(Place, Tokens)] -> InputArc -> [(Place, Tokens)]
-        f marking' (InputArc placeI transitionI tokenI) = 
-            foldl' f' [] marking' 
-          where 
-            f' :: [(Place, Tokens)] -> [(Place, Tokens)] -> [(Place, Tokens)]
-            f' m1 m2 = if 
-
--}
-
-
-
-{-
-
-
-
-            let
-                listOfRequiredTokend = tokenI currentArc
-                newMarking :: [(Place, Tokens )]
-                newMarking = 
-            in
-                go =
-
-    
---fire transition=> delete the required tokens from the initial place 
--- => put enough tokens in the places that the output arcs end in
-    -}
+transitionPostSetAddition :: PetriNet -> Transition -> PetriNet
+transitionPostSetAddition net@(PetriNet {marking = oldMarking}) t = 
+    net 
+    { marking = 
+        markingOutputArcsListAddition oldMarking (postSetArcs net t)} 
