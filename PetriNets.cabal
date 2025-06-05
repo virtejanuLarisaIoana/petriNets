@@ -58,6 +58,7 @@ library
     exposed-modules:
         Data.PetriNet
         Data.PetriNet.SampleNets
+        Data.MetadataTracingQueue
     build-depends:
         , base
         , bytestring
