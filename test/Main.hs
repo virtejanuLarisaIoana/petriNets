@@ -340,13 +340,11 @@ fullTestCaseFiring = testGroup "Firing on polimorfic metadata nets"[
                 Map.fromList[
                     ("P1", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 14 [Node 1 [], Node 2[]], 1)] )])
                     , ("P2", TokensMD $ Map.fromList [("z", MTQ.fromList[(Node 3[], 1)])])
-                    , ("P3", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 7777 [Node 2 [] ,Node 14 [Node 1 [], Node 2[]], Node 3[]], 3)])])
+                    , ("P3", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 7777 [Node 2 [] ,Node 14 [Node 1 [], Node 2[]], Node 2 [Node 5 []]], 3)])])
                     , ("P4", TokensMD $ Map.fromList [])
-                    , ("P5", TokensMD $ Map.fromList [])
-                ]
-
-    }rootLabel = 7777, subForest = [Node {rootLabel = 2, subForest = []},Node {rootLabel = 14, subForest = [Node {rootLabel = 1, subForest = []},Node {rootLabel = 2, subForest = []}]},Node {rootLabel = 2, subForest = [Node {rootLabel = 5, subForest = []}]}]},3)]})]})
-    }rootLabel = 7777, subForest = [Node {rootLabel = 14, subForest = [Node {rootLabel = 1, subForest = []},Node {rootLabel = 2, subForest = []}]},Node {rootLabel = 3, subForest = []}]},3)]}
+                    , ("P5", TokensMD $ Map.fromList []) 
+                ] }
+    ]
 
 {-}
 

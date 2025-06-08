@@ -8,7 +8,8 @@ import Data.MetadataTracingQueue (MTQ, pushMTQ, toListMTQ, reRoot, empty, fromLi
 import Data.MetadataTracingQueue as MTQ
 import Data.List
 import Data.Tree
-import Data.Time.Clock (UTCTime)
+import Data.Time.Clock (UTCTime(..), secondsToDiffTime)
+import Data.Time.Calendar
 
 type Place = String
 type Transition = String
@@ -292,53 +293,14 @@ transitionPostSetShift meta net@(PetriNet{marking = oldMarking}) t =
         newMarking = snd( markingOutputArcListShift meta (oldTokens, intermidiaryMarking) (postSetArcs net t) )
     in 
         net { marking = newMarking }
-{-}
-singleTokenAddition :: String -> Integer -> Tokens -> Tokens
-singleTokenAddition tokenType tokenDelta (Tokens currentToken) =
-    Tokens
-        ( -- insertWith :: Ord k => (a -> a -> a) -> k -> a -> Map k a -> Map k a
-          Map.insertWith
-            (+)
-            tokenType
-            tokenDelta
-            currentToken
-        )
 
--- | Adds one set of tokens to the corresponding spots in another set of tokens
-it is going to be f a b => a is added over be
-Ex: [("foo", 2), ("bar", 1)] `multipleTokensAddition` [("foo", 1), ("baz", 10)] == [("foo", 3), ("bar", 1), ("baz", 10)]
+placeholderTime :: UTCTime
+placeholderTime = UTCTime (fromGregorian 2025 6 5) (secondsToDiffTime 3600)  -- 2025-06-05 01:00:00
 
-multipleTokensAddition :: Tokens -> Tokens -> Tokens
-multipleTokensAddition deltaTokens (Tokens currentTokens) =
-    Map.foldrWithKey' singleTokenAddition deltaTokens currentTokens
-
--- | Adds a set of tokens in a given place in a given marking
-When the key aka the place is not a member of the map, the original map is returned
-
-markingTokensAddition :: Marking metadata -> Place -> Tokens -> Marking metadata
-markingTokensAddition (Marking givenMarking) place deltaTokens =
-    Marking $
-        Map.adjust
-            (\currentTokens -> deltaTokens `multipleTokensAddition` currentTokens)
-            place
-            givenMarking
-
-markingOutputArcAddition :: Marking metadata -> OutputArc -> Marking metadata
-markingOutputArcAddition marking (OutputArc _trans place deltaTokens) = markingTokensAddition marking place deltaTokens
-
--- foldl' :: (b -> a -> b) -> b -> t a -> b
--- a ~ OutputArc
--- t ~ []
--- b ~ Marking
--- foldl' specialized :: (Marking -> OutputArc -> Marking) -> Marking -> [OutputArc] -> Marking
-markingOutputArcsListAddition :: Marking metadata -> [OutputArc] -> Marking metadata
-markingOutputArcsListAddition givenMarking arcs = foldl' markingOutputArcAddition givenMarking arcs
-
-transitionPostSetAddition :: PetriNet metadata -> Transition -> PetriNet metadata
-transitionPostSetAddition net@(PetriNet{marking = oldMarking}) t =
-    net
-        { marking =
-            markingOutputArcsListAddition oldMarking (postSetArcs net t)
-        }
--}
-
+fireTaggedTransition :: PetriNet (Transition, UTCTime )-> Transition->  PetriNet (Transition, UTCTime)
+fireTaggedTransition net t = case isEnabled net t of
+    Nothing -> error "Transition not enabled"
+    _ ->  transitionPostSetShift (t, placeholderTime) net t
+    
+fireTaggedSequence :: PetriNet (Transition, UTCTime) -> PetriNet (Transition, UTCTime)
+fireTaggedSequence net@(PetriNet places tranz inputArcs outArcs marking) = foldl fireTaggedTransition net tranz 
