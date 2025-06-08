@@ -180,7 +180,7 @@ firingTests =
         ]
 
 tokenDelitionTests :: TestTree
-tokenDelitionTests = testGroup "Token deletion tests" [singleTokenShift, listOfTokensShifting, markingTokensShiftingTests{-}, tokensSubstractedFromAnArc, tokensSubstractedFromListOfArcs, fullTokenSubstractionFiredTransition-}]
+tokenDelitionTests = testGroup "Token deletion tests" [singleTokenShift, listOfTokensShifting, markingTokensShiftingTests, tokensShiftedFromAnArc, tokensShiftedFromListOfArcs, transitionPresetShiftTest]
 
 singleTokenShift :: TestTree
 singleTokenShift =
@@ -215,24 +215,86 @@ markingTokensShiftingTests :: TestTree
 markingTokensShiftingTests =
     testGroup
         "Shift a set of tokens from a given marking at a given place"
-        [ testCase "Atomic net" $ markingTokensSubtract (marking testNet0) "P1" (Tokens (Map.fromList [("x", 1)])) @?= Marking (Map.fromList [("P1", Tokens $ Map.fromList []), ("P2", Tokens $ Map.fromList [])])
-        ]
-{-}
-tokensSubstractedFromAnArc :: TestTree
-tokensSubstractedFromAnArc =
-    testGroup
-        "Substract a set of tokens from a marking given an Input Arc"
-        [ testCase "Atomic net" $ markingInputArcSubtract (marking testNet0) (InputArc{placeI = "P1", transitionI = "T1", tokenI = Tokens (Map.fromList [("x", 1)])}) @?= Marking (Map.fromList [("P1", Tokens $ Map.fromList []), ("P2", Tokens $ Map.fromList [])])
-        -- needs the rest cases
-        ]
-tokensSubstractedFromListOfArcs :: TestTree
-tokensSubstractedFromListOfArcs =
-    testGroup
-        "Substract tokens and update marking for a list of arcs"
-        [ testCase "Atomic net" $ markingInputArcListSubtract (marking testNet0) (inputArcs testNet0) @?= Marking (Map.fromList [("P1", Tokens $ Map.fromList []), ("P2", Tokens $ Map.fromList [])])
-        -- needs the rest of the cases
+        [ testCase "Atomic net empty" $ markingTokensShift (TokensMD Map.empty , marking testNet0) "P1" (Tokens (Map.fromList [("x", 1)])) @?=
+                                    ( TokensMD $ Map.fromList [("x",  MTQ.fromList [(Node 1 [], 1)] )]
+                                    , Marking $ Map.fromList
+                                                [ ("P1", TokensMD $ Map.empty)
+                                                , ("P2", TokensMD $ Map.empty)] ),
+            testCase "Simple net shift 2 x tokens from P1 empty" $ markingTokensShift (TokensMD Map.empty, marking testNet1) "P1"(Tokens $ Map.fromList [("x", 2)]) @?=
+                ( TokensMD $ Map.fromList [("x", MTQ.fromList [(Node 14 [Node 1 [], Node 2[]], 2)])]
+                , Marking $ Map.fromList
+                    [ ("P1", TokensMD $ Map.fromList [("x", MTQ.fromList [(Node 14 [Node 1 [], Node 2[]], 1)])])
+                    , ("P2", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 2 [],1)])
+                                                    , ("y",MTQ.fromList[(Node 2 [Node 5 []], 2)])
+                                                    , ("z", MTQ.fromList[(Node 3[], 1)])])
+                    , ("P3", TokensMD Map.empty)
+                    , ("P4", TokensMD Map.empty)
+                    , ("P5", TokensMD Map.empty)
+                    ]
+                ),
+            testCase "Simple net shift 1 x, 2 y from P2 after P1 shift" $   let (tokens1, marking1) = markingTokensShift (TokensMD Map.empty, marking testNet1) "P1" (Tokens $ Map.fromList [("x", 2)])
+                    in markingTokensShift (tokens1, marking1) "P2" (Tokens $ Map.fromList [("x", 1), ("y", 2)]) @?= 
+                    ( TokensMD $ Map.fromList
+                        [ ("x", MTQ.fromList [(Node 2 [], 1), (Node 14 [Node 1 [], Node 2[]], 2)])
+                        , ("y", MTQ.fromList [(Node 2 [Node 5 []], 2)])
+                        ]
+                    , Marking $ Map.fromList
+                        [ ("P1", TokensMD $ Map.fromList [("x", MTQ.fromList [(Node 14 [Node 1 [], Node 2[]], 1)])])
+                        , ("P2", TokensMD $ Map.fromList [("z", MTQ.fromList[(Node 3[], 1)])])
+                        , ("P3", TokensMD Map.empty)
+                        , ("P4", TokensMD Map.empty)
+                        , ("P5", TokensMD Map.empty)
+                        ]
+                    )
         ]
 
+tokensShiftedFromAnArc :: TestTree
+tokensShiftedFromAnArc =
+    testGroup
+        "Shift a set of tokens from a marking given an Input Arc"
+        [ testCase "Atomic net" $ markingInputArcShift (TokensMD Map.empty, marking testNet0) InputArc{placeI = "P1", transitionI = "T1", tokenI = Tokens $ Map.fromList [("x", 1)]} @?= 
+                    ( TokensMD $ Map.fromList [("x",  MTQ.fromList [(Node 1 [], 1)] )]
+                                    , Marking $ Map.fromList
+                                                [ ("P1", TokensMD $ Map.empty)
+                                                , ("P2", TokensMD $ Map.empty)] )
+        ]
+
+
+tokensShiftedFromListOfArcs :: TestTree
+tokensShiftedFromListOfArcs =
+    testGroup
+        "Shift tokens and update marking for a list of arcs"
+        [ testCase "Simple net P1 P2 arcs" $ markingInputArcListShift (marking testNet1) [ InputArc "P1" "T1" (Tokens $ Map.fromList [("x", 2)]), InputArc "P2" "T1" (Tokens $ Map.fromList [("x", 1), ("y", 2)])] @?=
+        ( TokensMD $ Map.fromList
+            [ ("x", MTQ.fromList [(Node 2 [], 1), (Node 14 [Node 1 [], Node 2 []], 2) ])
+            , ("y", MTQ.fromList [(Node 2 [Node 5 []], 2) ])]
+        , Marking $ Map.fromList
+            [ ("P1", TokensMD $ Map.fromList [("x", MTQ.fromList [ (Node 14 [Node 1 [], Node 2 []], 1)])])
+            , ("P2", TokensMD $ Map.fromList [("z", MTQ.fromList [(Node 3 [], 1)])])
+            , ("P3", TokensMD Map.empty)
+            , ("P4", TokensMD Map.empty)
+            , ("P5", TokensMD Map.empty)
+        ]
+    )
+            ]
+
+transitionPresetShiftTest :: TestTree 
+transitionPresetShiftTest = testGroup "Shift tokens for firing a certain transition" [
+    testCase "Simple net T1 fired" $ transitionPresetShift testNet1 "T1" @?= ( TokensMD $ Map.fromList
+        [("x", MTQ.fromList[(Node 2 [], 1), (Node 14 [Node 1 [], Node 2 []], 2)])
+        ,("y", MTQ.fromList[(Node 2 [Node 5 []], 2) ]) ]
+    , testNet1
+        { marking = Marking $ Map.fromList
+            [ ("P1", TokensMD $ Map.fromList[("x", MTQ.fromList[(Node 14 [Node 1 [], Node 2 []], 1)])])
+            , ("P2", TokensMD $ Map.fromList[("z", MTQ.fromList[(Node 3 [], 1)])])
+            , ("P3", TokensMD Map.empty)
+            , ("P4", TokensMD Map.empty)
+            , ("P5", TokensMD Map.empty)
+            ]
+        }
+    )
+    ]
+{-}
 fullTokenSubstractionFiredTransition :: TestTree
 fullTokenSubstractionFiredTransition =
     testGroup

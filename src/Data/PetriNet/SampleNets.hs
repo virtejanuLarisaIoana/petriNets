@@ -75,9 +75,9 @@ testNet0fired =
                     [ ("P1", Tokens $ Map.fromList [])
                     , ("P2", Tokens $ Map.fromList [("x", 1)])
                     ]
-        }
+        } -}
 
-testNet1 :: PetriNet metadata
+testNet1 :: PetriNet Integer
 testNet1 =
     PetriNet
         { places = ["P1", "P2", "P3", "P4", "P5"]
@@ -95,11 +95,12 @@ testNet1 =
         , marking =
             Marking $
                 Map.fromList
-                    [ ("P1", Tokens $ Map.fromList [("x", 3)])
-                    , ("P2", Tokens $ Map.fromList [("x", 1), ("y", 2), ("z", 1)])
-                    , ("P3", Tokens $ Map.fromList [])
-                    , ("P4", Tokens $ Map.fromList [])
-                    , ("P5", Tokens $ Map.fromList [])
+                    [ ("P1", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 14 [Node 1 [], Node 2[]], 3)] )])
+                    , ("P2", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 2 [],1)])
+                                                    , ("y",MTQ.fromList[(Node 2 [Node 5 []], 2)] )
+                                                    , ("z", MTQ.fromList[(Node 3[], 1)])])
+                    , ("P3", TokensMD $ Map.fromList [])
+                    , ("P4", TokensMD $ Map.fromList [])
+                    , ("P5", TokensMD $ Map.fromList [])
                     ]
         }
--}
