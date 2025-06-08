@@ -7,6 +7,9 @@ import Data.Maybe
 import Data.MetadataTracingQueue (MTQ, pushMTQ, toListMTQ, reRoot, empty, fromList)
 import Data.MetadataTracingQueue as MTQ
 import Data.List
+import Data.Tree
+import Data.Time.Clock (UTCTime)
+
 type Place = String
 type Transition = String
 
@@ -228,12 +231,16 @@ transitionPresetShift net@(PetriNet{marking = oldMarking}) t =
     in     
       (tokensAcc, net { marking = newMarking })
 
-tokenPostShiftSingle :: metadata -> String -> Integer -> (TokensMD metadata, TokensMD metadata) -> (TokensMD metadata, TokensMD metadata)
+tokenPostShiftSingle ::  metadata -> String -> Integer -> (TokensMD metadata, TokensMD metadata) -> (TokensMD metadata, TokensMD metadata)
 tokenPostShiftSingle meta tokenType tokenDelta (oldTokens, newTokens) = 
     let 
         -- oldMTQ :: MTQ metadata 
-        oldMTQ = Map.findWithDefault ( MTQ.empty ) tokenType (tokensMDMap oldTokens)
-        oldTrees = fmap fst( MTQ.toListMTQ oldMTQ)
+        -- Takes the metadata of the tokens that need to be deleted so it can reroot it for traceability
+
+        allMTQs = Map.elems (tokensMDMap oldTokens)   -- [MTQ metadata]
+        allPairs = concatMap MTQ.toListMTQ allMTQs    
+        oldTrees = fmap fst allPairs
+
         newTokensMap = tokensMDMap newTokens
         newMetadata = MTQ.reRoot meta oldTrees
     in 
@@ -242,30 +249,50 @@ tokenPostShiftSingle meta tokenType tokenDelta (oldTokens, newTokens) =
         else 
             let
                 newMTQ = MTQ.fromList [(newMetadata, tokenDelta)]
-                updatedMap = Map.insertWith MTQ.pushMTQ tokenType newMTQ newTokensMap
+                updatedMap = Map.insertWith (flip MTQ.pushMTQ) tokenType newMTQ newTokensMap
             in
                 (oldTokens, TokensMD updatedMap)
 
-{-
+-- | Updates the Tokens for each tokenType and number from an arc 
+tokensPostShift :: metadata -> (TokensMD metadata, TokensMD metadata) -> Tokens -> (TokensMD metadata, TokensMD metadata)
+tokensPostShift meta tokensMD@(tokensToReroot, tokensToAddTo) (Tokens deltaTokensMap) =
+    (
+     TokensMD $ Map.fromList ( sortOn fst (Map.toList f)),
+     TokensMD  $ Map.fromList (sortOn fst (Map.toList g))
+    )
+    where
+        (TokensMD f,TokensMD g) = Map.foldrWithKey'
+            (\tokenType tokenDelta acc -> tokenPostShiftSingle meta tokenType tokenDelta acc) tokensMD deltaTokensMap
 
 
-markingTokensPostShift :: (TokensMD metadata, PetriNet metadata) -> Place -> Tokens -> (TokensMD metadata, Marking metadata)
-markingTokensPostShift (tokensToReroot, Marking newMarking) place deltaTokens = 
+attachMetadata :: Transition -> UTCTime -> (Transition, UTCTime)
+attachMetadata t time = (t, time)
 
-markingOutputArcShift :: (TokensMD metadata, PetriNet metadata) -> OutputArc -> 
-markingOutputArcShift tuple outArc(_trans place deltaTokens) = markingTokensPostShift tuple place deltaTokens
+markingTokensPostShift :: metadata -> (TokensMD metadata, Marking metadata) -> Place -> Tokens -> (TokensMD metadata, Marking metadata)
+markingTokensPostShift meta (tokensToReroot, Marking markingMap) place deltaTokens =
+    let (old, new) = tokensPostShift meta (tokensToReroot, markingMap Map.! place) deltaTokens
+    in 
+        ( old
+        , Marking $ Map.adjust (const new) place markingMap
+        )
 
--- | Shifts the corresponding tokens for each output arc
-markingOutputArcsListShift :: (TokensMD metadata, PetriNet metadata) -> [OutputArc] -> Marking metadata
-markingOutputArcsListShift (tokensToDelete, intermediaryMarking) arcs = foldl' markingOutputArcShift () arcs
+markingOutputArcShift :: metadata -> (TokensMD metadata, Marking metadata) -> OutputArc -> (TokensMD metadata, Marking metadata)
+markingOutputArcShift meta tokensMarkingTuple (OutputArc _trans place deltaTokens) =
+    markingTokensPostShift meta tokensMarkingTuple place deltaTokens
+
+markingOutputArcListShift :: metadata -> (TokensMD metadata, Marking metadata) -> [OutputArc] -> (TokensMD metadata, Marking metadata)
+markingOutputArcListShift meta (oldTokens, marking) arcs = foldl' (markingOutputArcShift meta) (oldTokens, marking) arcs
 
 -- | The net is fired and gets a new marking
-transitionPostSetShift :: PetriNet metadata -> Transition -> PetriNet metadata
-transitionPostSetShift net@(PetriNet{marking = oldMarking}) t =
+transitionPostSetShift :: metadata -> PetriNet metadata -> Transition -> PetriNet metadata
+transitionPostSetShift meta net@(PetriNet{marking = oldMarking}) t =
     let 
-        newMarking = markingOutputArcsListShift (transitionPresetShift net t) (postSetArcs net t)
-    in net {marking = newMarking}
--}
+        (oldTokens, intermidiaryNet) = transitionPresetShift net t
+        intermidiaryMarking = marking intermidiaryNet
+        newMarking = snd( markingOutputArcListShift meta (oldTokens, intermidiaryMarking) (postSetArcs net t) )
+    in 
+        net { marking = newMarking }
+{-}
 singleTokenAddition :: String -> Integer -> Tokens -> Tokens
 singleTokenAddition tokenType tokenDelta (Tokens currentToken) =
     Tokens
@@ -277,18 +304,17 @@ singleTokenAddition tokenType tokenDelta (Tokens currentToken) =
             currentToken
         )
 
-{- | Adds one set of tokens to the corresponding spots in another set of tokens
+-- | Adds one set of tokens to the corresponding spots in another set of tokens
 it is going to be f a b => a is added over be
 Ex: [("foo", 2), ("bar", 1)] `multipleTokensAddition` [("foo", 1), ("baz", 10)] == [("foo", 3), ("bar", 1), ("baz", 10)]
--}
+
 multipleTokensAddition :: Tokens -> Tokens -> Tokens
 multipleTokensAddition deltaTokens (Tokens currentTokens) =
     Map.foldrWithKey' singleTokenAddition deltaTokens currentTokens
 
-{- | Adds a set of tokens in a given place in a given marking
+-- | Adds a set of tokens in a given place in a given marking
 When the key aka the place is not a member of the map, the original map is returned
--}
-{-}
+
 markingTokensAddition :: Marking metadata -> Place -> Tokens -> Marking metadata
 markingTokensAddition (Marking givenMarking) place deltaTokens =
     Marking $
@@ -315,3 +341,4 @@ transitionPostSetAddition net@(PetriNet{marking = oldMarking}) t =
             markingOutputArcsListAddition oldMarking (postSetArcs net t)
         }
 -}
+

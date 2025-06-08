@@ -32,8 +32,13 @@ genericMDTestToken2  = TokensMD $ Map.fromList [("foo",   MTQ.fromList [(Node 1 
 genericTokensMDtuple :: (TokensMD Integer, TokensMD Integer)
 genericTokensMDtuple =  (TokensMD $ Map.fromList[("bar", MTQ.fromList [(Node 1 [], 2)])], genericMDTestToken2)
 
+
 genericTokensMDtupleEmpty :: (TokensMD Integer, TokensMD Integer)
 genericTokensMDtupleEmpty =  (TokensMD Map.empty, genericMDTestToken2)
+
+genericTokensMDtupleEmptySnd :: (TokensMD Integer, TokensMD Integer)
+genericTokensMDtupleEmptySnd =  (TokensMD $ Map.fromList[("bar", MTQ.fromList [(Node 1 [], 4)]),
+                                                ("baz", MTQ.fromList [(Node 16 [], 5)])], TokensMD Map.empty)
 
 genericTestToken1 :: Tokens
 genericTestToken1 = Tokens $ Map.fromList [("foo", 7), ("bar", 2)]

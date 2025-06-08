@@ -63,6 +63,7 @@ library
         , base
         , bytestring
         , containers
+        , time
 
 test-suite PetriNets-test
     -- Import common warning flags.
@@ -94,3 +95,4 @@ test-suite PetriNets-test
         , tasty-hunit
         , containers
         , bytestring
+        , time 

@@ -59,7 +59,7 @@ push :: Tree m -> Integer -> MTQ m -> MTQ m
 push meta quantity (MTQ existingQueue) = MTQ $ existingQueue Seq.|> (meta, quantity)
 
 reRoot :: m -> [Tree m] -> Tree m
-reRoot = Node 
+reRoot m trees = Node m trees
 
 pushMTQ :: 
   -- | The existing queue

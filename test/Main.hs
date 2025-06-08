@@ -296,19 +296,61 @@ transitionPresetShiftTest = testGroup "Shift tokens for firing a certain transit
     ]
 
 tokenAdditionTests :: TestTree
-tokenAdditionTests = testGroup "Shifting tokens for the output arcs"[singleTokenAdditionTest]
-
-
+tokenAdditionTests = testGroup "Shifting tokens for the output arcs"[singleTokenAdditionTest, tokensShiftedAdditionTests, markingTokensPostsetShiftTests, fullTestCaseFiring]
 
 singleTokenAdditionTest :: TestTree
 singleTokenAdditionTest = testGroup "Adding a single token to a new Tokens <list>"[
-    testCase "Generic token, non-empty second Tokens" $ tokenPostShiftSingle ((Node 222[])) "foo" 3 genericTokensMDtuple @?=
+    testCase "Generic token, non-empty second Tokens" $ tokenPostShiftSingle  222 "foo" 3 genericTokensMDtuple @?=
         (TokensMD $ Map.fromList[("bar", MTQ.fromList [(Node 1 [], 2)])], 
-            TokensMD $ Map.fromList [ ("bar", MTQ.fromList [(Node 1 [], 2)]), 
-                ("foo", MTQ.fromList [(Node 1 [ Node 2 [] , Node 3 []], 3), (Node 1 [], 4), (Node 222 [Node 1[]], 3)])] )
+            TokensMD $ Map.fromList [ ("bar", MTQ.fromList [(Node 1 [], 4)]),
+                ("baz", MTQ.fromList [(Node 16 [], 5), (Node 55 [Node 4 []], 10)]),
+                ("foo", MTQ.fromList [(Node 1 [ Node 2 [] , Node 3 []], 2), (Node 1 [], 7), (Node 1 [Node 4 []], 1), (Node 222 [Node 1[]], 3)])] ),
+    testCase "Generic token, empty second Tokens" $ tokenPostShiftSingle 333 "foo" 100 genericTokensMDtupleEmptySnd @?=
+        (
+            TokensMD $ Map.fromList[("bar", MTQ.fromList [(Node 1 [], 4)]), ("baz", MTQ.fromList [(Node 16 [], 5)])],
+            TokensMD $ Map.fromList[("foo", MTQ.fromList[(Node 333 [Node 1 [], Node 16 []], 100)])]
+        )
+    ]
+tokensShiftedAdditionTests :: TestTree
+tokensShiftedAdditionTests = testGroup "Adding multiple tokens to a new Tokens <list>" [
+    testCase "Generic tokens" $ tokensPostShift 444 (TokensMD $ Map.fromList [ ("bar", MTQ.fromList [(Node 1 [], 4)])] , TokensMD $ Map.empty) genericTestToken1 @?= 
+        (TokensMD $ Map.fromList [ ("bar", MTQ.fromList [(Node 1 [], 4)])] 
+        ,TokensMD $ Map.fromList[("bar", MTQ.fromList [(Node 444 [Node 1 []], 2)]), ("foo", MTQ.fromList [(Node 444 [Node 1 []], 7)])])
     ]
 
+markingTokensPostsetShiftTests :: TestTree
+markingTokensPostsetShiftTests = testGroup "Update marking after postShifting for one  place"[
+    testCase "Simple net marking" $ markingTokensPostShift 555 (TokensMD $ Map.fromList [("x",  MTQ.fromList [(Node 1 [], 1)])], marking testNet0) "P2" (Tokens (Map.fromList [("x", 1)])) @?=
+        (
+            TokensMD $ Map.fromList [("x",  MTQ.fromList [(Node 1 [], 1)])],
+            Marking $ Map.fromList
+                    [ ("P1", TokensMD $ Map.fromList [("x",  MTQ.fromList [(Node 1 [], 1)] )])
+                    , ("P2", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 555 [Node 1 []], 1)])])]
+                    )
+    ]
+
+fullTestCaseFiring :: TestTree 
+fullTestCaseFiring = testGroup "Firing on polimorfic metadata nets"[
+    testCase "Atomic net" $ transitionPostSetShift 1111 testNet0 "T1" @?= testNet0{marking = Marking $
+                Map.fromList
+                    [ ("P1", TokensMD $ Map.empty )
+                    , ("P2", TokensMD $ Map.fromList [("x",  MTQ.fromList [(Node 1111 [Node 1 []], 1)])])
+                    ]},
+    testCase "Simple net fired of T1" $ transitionPostSetShift 7777 testNet1 "T1" @?= testNet1{marking = Marking $
+                Map.fromList[
+                    ("P1", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 14 [Node 1 [], Node 2[]], 1)] )])
+                    , ("P2", TokensMD $ Map.fromList [("z", MTQ.fromList[(Node 3[], 1)])])
+                    , ("P3", TokensMD $ Map.fromList [("x", MTQ.fromList[(Node 7777 [Node 2 [] ,Node 14 [Node 1 [], Node 2[]], Node 3[]], 3)])])
+                    , ("P4", TokensMD $ Map.fromList [])
+                    , ("P5", TokensMD $ Map.fromList [])
+                ]
+
+    }rootLabel = 7777, subForest = [Node {rootLabel = 2, subForest = []},Node {rootLabel = 14, subForest = [Node {rootLabel = 1, subForest = []},Node {rootLabel = 2, subForest = []}]},Node {rootLabel = 2, subForest = [Node {rootLabel = 5, subForest = []}]}]},3)]})]})
+    }rootLabel = 7777, subForest = [Node {rootLabel = 14, subForest = [Node {rootLabel = 1, subForest = []},Node {rootLabel = 2, subForest = []}]},Node {rootLabel = 3, subForest = []}]},3)]}
+
 {-}
+
+
 fullTokenSubstractionFiredTransition :: TestTree
 fullTokenSubstractionFiredTransition =
     testGroup
