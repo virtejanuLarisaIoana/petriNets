@@ -4,7 +4,7 @@ import Data.Foldable (foldl')
 import Data.Map (Map, (!?))
 import qualified Data.Map as Map
 import Data.Maybe
-import Data.MetadataTracingQueue (MTQ)
+import Data.MetadataTracingQueue (MTQ, pushMTQ, toListMTQ, reRoot, empty, fromList)
 import Data.MetadataTracingQueue as MTQ
 import Data.List
 type Place = String
@@ -160,8 +160,7 @@ tokensShiftSingle tokenType tokenDelta (TokensMD tokensToAddTo, TokensMD tokensT
                     0 -> Nothing
                     x -> Just remainingTokens
 
---rerootMetadata :: metadata 
---rerootMetadata m = m
+
 
 {- | "Shifts" one set of tokens from another, element-wise.
 
@@ -198,7 +197,7 @@ tokensShift tokensMD@(tokensToAddTo, tokensToRemoveFrom) (Tokens deltaTokensMap)
         (TokensMD f,TokensMD g) = Map.foldrWithKey' tokensShiftSingle tokensMD deltaTokensMap
 
 {- | Shifts a set of tokens out of a given place in a given marking and into the 
-tokens accumulator on the first eleme nt of the tuple
+tokens accumulator on the first element of the tuple
 
 WARNING:
   - Raises an exception if the place doesn't exisit in the marking
@@ -229,6 +228,44 @@ transitionPresetShift net@(PetriNet{marking = oldMarking}) t =
     in     
       (tokensAcc, net { marking = newMarking })
 
+tokenPostShiftSingle :: metadata -> String -> Integer -> (TokensMD metadata, TokensMD metadata) -> (TokensMD metadata, TokensMD metadata)
+tokenPostShiftSingle meta tokenType tokenDelta (oldTokens, newTokens) = 
+    let 
+        -- oldMTQ :: MTQ metadata 
+        oldMTQ = Map.findWithDefault ( MTQ.empty ) tokenType (tokensMDMap oldTokens)
+        oldTrees = fmap fst( MTQ.toListMTQ oldMTQ)
+        newTokensMap = tokensMDMap newTokens
+        newMetadata = MTQ.reRoot meta oldTrees
+    in 
+        if Map.null newTokensMap
+            then  (oldTokens, TokensMD $ Map.singleton tokenType (MTQ.fromList [(newMetadata, tokenDelta)]))
+        else 
+            let
+                newMTQ = MTQ.fromList [(newMetadata, tokenDelta)]
+                updatedMap = Map.insertWith MTQ.pushMTQ tokenType newMTQ newTokensMap
+            in
+                (oldTokens, TokensMD updatedMap)
+
+{-
+
+
+markingTokensPostShift :: (TokensMD metadata, PetriNet metadata) -> Place -> Tokens -> (TokensMD metadata, Marking metadata)
+markingTokensPostShift (tokensToReroot, Marking newMarking) place deltaTokens = 
+
+markingOutputArcShift :: (TokensMD metadata, PetriNet metadata) -> OutputArc -> 
+markingOutputArcShift tuple outArc(_trans place deltaTokens) = markingTokensPostShift tuple place deltaTokens
+
+-- | Shifts the corresponding tokens for each output arc
+markingOutputArcsListShift :: (TokensMD metadata, PetriNet metadata) -> [OutputArc] -> Marking metadata
+markingOutputArcsListShift (tokensToDelete, intermediaryMarking) arcs = foldl' markingOutputArcShift () arcs
+
+-- | The net is fired and gets a new marking
+transitionPostSetShift :: PetriNet metadata -> Transition -> PetriNet metadata
+transitionPostSetShift net@(PetriNet{marking = oldMarking}) t =
+    let 
+        newMarking = markingOutputArcsListShift (transitionPresetShift net t) (postSetArcs net t)
+    in net {marking = newMarking}
+-}
 singleTokenAddition :: String -> Integer -> Tokens -> Tokens
 singleTokenAddition tokenType tokenDelta (Tokens currentToken) =
     Tokens

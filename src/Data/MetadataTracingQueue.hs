@@ -18,11 +18,14 @@ module Data.MetadataTracingQueue (
     drop,
     split,
     fromList,
+    toListMTQ, 
+    reRoot,
     push
 ) where
 
 import Data.Sequence (Seq, (<|))
 import qualified Data.Sequence as Seq
+import qualified Data.Sequence.Internal as Seqi
 import Prelude hiding (drop, null, take)
 import Data.Tree
 
@@ -35,6 +38,11 @@ newtype MTQ metadata = MTQ {metadata :: Seq.Seq (Tree metadata, Integer)}
 
 fromList :: [(Tree metadata, Integer)] -> MTQ metadata
 fromList l = MTQ $ Seq.fromList l
+
+toListMTQ :: MTQ metadata -> [(Tree metadata, Integer)]
+toListMTQ (MTQ m) 
+  | Seq.null m = []
+  | otherwise    = Seq.index m 0 : toListMTQ (MTQ (Seq.drop 1 m))
 
 empty :: MTQ m
 empty = MTQ Seq.Empty
@@ -50,6 +58,8 @@ Example ::
 push :: Tree m -> Integer -> MTQ m -> MTQ m
 push meta quantity (MTQ existingQueue) = MTQ $ existingQueue Seq.|> (meta, quantity)
 
+reRoot :: m -> [Tree m] -> Tree m
+reRoot = Node 
 
 pushMTQ :: 
   -- | The existing queue

@@ -144,7 +144,7 @@ firingTests :: TestTree
 firingTests =
     testGroup
         "Firing Transitions Tests"
-        [ tokenDelitionTests{-
+        [ tokenDelitionTests, tokenAdditionTests {-
         --, tokenAdditionTests
         --, testCase "Atomic Net T1 Fired" $ fireTransition testNet0 "T1" @?= Just testNet0fired
         , testCase "Simple Net T1 Fired" $
@@ -294,6 +294,20 @@ transitionPresetShiftTest = testGroup "Shift tokens for firing a certain transit
         }
     )
     ]
+
+tokenAdditionTests :: TestTree
+tokenAdditionTests = testGroup "Shifting tokens for the output arcs"[singleTokenAdditionTest]
+
+
+
+singleTokenAdditionTest :: TestTree
+singleTokenAdditionTest = testGroup "Adding a single token to a new Tokens <list>"[
+    testCase "Generic token, non-empty second Tokens" $ tokenPostShiftSingle ((Node 222[])) "foo" 3 genericTokensMDtuple @?=
+        (TokensMD $ Map.fromList[("bar", MTQ.fromList [(Node 1 [], 2)])], 
+            TokensMD $ Map.fromList [ ("bar", MTQ.fromList [(Node 1 [], 2)]), 
+                ("foo", MTQ.fromList [(Node 1 [ Node 2 [] , Node 3 []], 3), (Node 1 [], 4), (Node 222 [Node 1[]], 3)])] )
+    ]
+
 {-}
 fullTokenSubstractionFiredTransition :: TestTree
 fullTokenSubstractionFiredTransition =
