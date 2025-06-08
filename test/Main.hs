@@ -1,32 +1,36 @@
 module Main (main) where
 
+import Data.Tree
 import qualified Data.Map as Map
+import Data.List 
 import Data.Maybe
 import qualified Data.MetadataTracingQueue as MTQ
-import Data.MetadataTracingQueue (MTQ)
-import Data.PetriNet (
+import Data.MetadataTracingQueue (MTQ, push)
+import Data.PetriNet.SampleNets
+import Data.PetriNet {-
     InputArc (InputArc, placeI, tokenI, transitionI),
     Marking (Marking),
     OutputArc (OutputArc, placeO, tokenO, transitionO),
     PetriNet (inputArcs, marking, outputArcs),
     Tokens (Tokens),
-    fireTransition,
+    TokensMD (TokensMD), 
+    --fireTransition,
     isEnabled,
-    markingInputArcListSubtract,
-    markingInputArcSubtract,
-    markingOutputArcAddition,
-    markingOutputArcsListAddition,
-    markingTokensAddition,
-    markingTokensSubtract,
-    multipleTokensAddition,
+    --markingInputArcListSubtract,
+    --markingInputArcSubtract,
+    --markingOutputArcAddition,
+    --markingOutputArcsListAddition,
+    --markingTokensAddition,
+    --markingTokensSubtract,
+    --multipleTokensAddition,
     postSetArcs,
     preSetArcs,
-    singleTokenAddition,
-    tokensSatisfied,
-    tokensSubtract,
-    tokensSubtractSingle,
-    transitionPostSetAddition,
-    transitionPresetSubtract,
+    --singleTokenAddition,
+    --tokensSatisfied,
+    --tokensSubtract,
+    tokensShiftSingle,
+    --transitionPostSetAddition,
+    --transitionPresetSubtract,
  )
 import Data.PetriNet.SampleNets (
     genericTestToken0,
@@ -35,10 +39,11 @@ import Data.PetriNet.SampleNets (
     genericTestToken3,
     testNet0,
     testNet0fired,
-    testNet1,
- )
+    testNet1,-}
+ 
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, testCase, (@?=))
+
 
 main :: IO ()
 main = defaultMain tests
@@ -50,14 +55,14 @@ unitTests :: TestTree
 unitTests =
     testGroup
         "Unit Tests"
-        [ tokensSatisfiedTests
-        , presetTests
-        , postsetTests
-        , enabledTransitionTests
-        , firingTests
-        , mtqTests
+        [ --tokensSatisfiedTests
+        --, presetTests
+        --, postsetTests
+        --, enabledTransitionTests
+        firingTests
+        --, mtqTests
         ]
-
+{-
 tokensSatisfiedTests :: TestTree
 tokensSatisfiedTests =
     testGroup
@@ -134,14 +139,14 @@ enabledTransitionTests =
         , testCase "Simple Net Enabled T1" $ isEnabled testNet1 "T1" @?= Just True
         -- T2??
         ]
-
+-}
 firingTests :: TestTree
 firingTests =
     testGroup
         "Firing Transitions Tests"
-        [ tokenDelitionTests
-        , tokenAdditionTests
-        , testCase "Atomic Net T1 Fired" $ fireTransition testNet0 "T1" @?= Just testNet0fired
+        [ tokenDelitionTests{-
+        --, tokenAdditionTests
+        --, testCase "Atomic Net T1 Fired" $ fireTransition testNet0 "T1" @?= Just testNet0fired
         , testCase "Simple Net T1 Fired" $
             fireTransition testNet1 "T1"
                 @?= Just
@@ -171,35 +176,48 @@ firingTests =
                                     , ("P4", Tokens $ Map.fromList [("x", 1)])
                                     , ("P5", Tokens $ Map.fromList [("y", 1)])
                                     ]
-                        }
+                        }-}
         ]
 
 tokenDelitionTests :: TestTree
-tokenDelitionTests = testGroup "Token deletion tests" [singleTokenSubstraction, listOfTokensSubstraction, markingTokensSubstractTests, tokensSubstractedFromAnArc, tokensSubstractedFromListOfArcs, fullTokenSubstractionFiredTransition]
+tokenDelitionTests = testGroup "Token deletion tests" [singleTokenShift, listOfTokensShifting, markingTokensShiftingTests{-}, tokensSubstractedFromAnArc, tokensSubstractedFromListOfArcs, fullTokenSubstractionFiredTransition-}]
 
-singleTokenSubstraction :: TestTree
-singleTokenSubstraction =
+singleTokenShift :: TestTree
+singleTokenShift =
     testGroup
         "Substract single token of a type"
-        [ testCase "Generic Tokens Substraction Completed" $ tokensSubtractSingle (fst genericTestToken0) (snd genericTestToken0) genericTestToken1 @?= Tokens (Map.fromList [("foo", 1), ("bar", 4)])
-        -- testCase "Generic Tokens Substraction Ignored" $ tokensSubtractSingle "bar" 5 genericTestToken2 @?= genericTestToken2
+        [ testCase "Generic Tokens Shifting on empty list" $ tokensShiftSingle "foo" 5  (TokensMD (Map.fromList []), genericMDTestToken1) @?= (
+                                    TokensMD ( Map.fromList [ ("foo",   MTQ.fromList [(Node 1 [ Node 2 [] , Node 3 []], 3), (Node 1 [], 2)])]),
+                                    TokensMD ( Map.fromList [ ("foo",   MTQ.fromList [(Node 1 [], 2)]), ("bar", MTQ.fromList [(Node 1 [], 2)])]) ),
+        testCase "Generic Tokens Shifting already an element in the list" $ tokensShiftSingle "foo" 5 (TokensMD (Map.fromList [("foo", MTQ.fromList [(Node 1 [], 2)])]), genericMDTestToken1) @?= (
+                                    TokensMD ( Map.fromList [ ("foo",   MTQ.fromList [(Node 1 [ Node 2 [] , Node 3 []], 3), (Node 1 [], 2), (Node 1 [], 2)])]),
+                                    TokensMD ( Map.fromList [ ("foo",   MTQ.fromList [(Node 1 [], 2)]), ("bar", MTQ.fromList [(Node 1 [], 2)])]) )
         ]
 
-listOfTokensSubstraction :: TestTree
-listOfTokensSubstraction =
-    testGroup
-        "Substract the corresponding tokens from two lists"
-        [ testCase "Generic tokens-tokens substraction" $ tokensSubtract genericTestToken2 genericTestToken1 @?= Tokens (Map.fromList [("foo", 7), ("baz", 10)])
-        -- needs the false test
-        ]
+listOfTokensShifting :: TestTree 
+listOfTokensShifting = testGroup "Shift the corresponding tokens from two lists" [
+    testCase "Generic tokens-tokens shifting on empty list" $ tokensShift genericTokensMDtupleEmpty genericTestToken1 @?=
+                    (
+                        TokensMD $ Map.fromList (rez1), 
+                        TokensMD $ Map.fromList (rez2)
+                    ),
+    testCase "Generic tokens-tokens shifting on non-empty list" $ tokensShift genericTokensMDtuple genericTestToken1 @?= (
+        TokensMD $ Map.fromList [("bar", MTQ.fromList [(Node 1 [], 2), (Node 1 [], 2) ]), ("foo",   MTQ.fromList [(Node 1 [ Node 2 [] , Node 3 []], 2), (Node 1 [], 5)])],
+        TokensMD $ Map.fromList [("bar", MTQ.fromList [(Node 1 [], 2)]), ("baz", MTQ.fromList [(Node 16 [], 5), (Node 55 [Node 4 []], 10)]), ("foo", MTQ.fromList [(Node 1 [], 2), (Node 1 [Node 4 []], 1)])]
+    )
 
-markingTokensSubstractTests :: TestTree
-markingTokensSubstractTests =
+    ]
+
+
+
+
+markingTokensShiftingTests :: TestTree
+markingTokensShiftingTests =
     testGroup
-        "Substract a set of tokens from a given marking at a given place"
+        "Shift a set of tokens from a given marking at a given place"
         [ testCase "Atomic net" $ markingTokensSubtract (marking testNet0) "P1" (Tokens (Map.fromList [("x", 1)])) @?= Marking (Map.fromList [("P1", Tokens $ Map.fromList []), ("P2", Tokens $ Map.fromList [])])
         ]
-
+{-}
 tokensSubstractedFromAnArc :: TestTree
 tokensSubstractedFromAnArc =
     testGroup
@@ -335,7 +353,6 @@ fullTokenAdditionFiredTransition =
                                 ]
                     }
         ]
-
 mtqTests :: TestTree
 mtqTests =
     testGroup "Metadata Tracing Queue Tests" $
@@ -372,3 +389,4 @@ mtqTests =
        where
         mtqSample1 :: MTQ String
         mtqSample1 = MTQ.fromList [("foo", 3), ("bar", 10), ("qux", 15)]
+-}

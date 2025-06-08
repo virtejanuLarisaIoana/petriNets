@@ -13,31 +13,33 @@ module Data.MetadataTracingQueue (
     null,
     singleton,
     MTQ,
-    push,
+    pushMTQ,
     take,
     drop,
     split,
-    fromList
+    fromList,
+    push
 ) where
 
 import Data.Sequence (Seq, (<|))
 import qualified Data.Sequence as Seq
 import Prelude hiding (drop, null, take)
+import Data.Tree
 
 {- | A FIFO queue holding a single semantic "type" of object
 (i.e., a petri net token of a particular type) where multiple objects can share metadata.
 -}
-newtype MTQ metadata = MTQ {metadata :: Seq.Seq (metadata, Integer)}
+newtype MTQ metadata = MTQ {metadata :: Seq.Seq (Tree metadata, Integer)}
   deriving (Eq, Show)
 
 
-fromList :: [(metadata, Integer)] -> MTQ metadata
+fromList :: [(Tree metadata, Integer)] -> MTQ metadata
 fromList l = MTQ $ Seq.fromList l
 
 empty :: MTQ m
 empty = MTQ Seq.Empty
 
-singleton :: m -> Integer -> MTQ m
+singleton :: Tree m -> Integer -> MTQ m 
 singleton meta quantity = MTQ $ Seq.singleton (meta, quantity)
 
 {- | Add an element to the front of the queue
@@ -45,8 +47,18 @@ singleton meta quantity = MTQ $ Seq.singleton (meta, quantity)
 Example ::
    push "qux" 10 [("foo", 3), ("bar, 10")] == [("foo", 3), ("bar", 10), ("qux", 10)]
 -}
-push :: m -> Integer -> MTQ m -> MTQ m
+push :: Tree m -> Integer -> MTQ m -> MTQ m
 push meta quantity (MTQ existingQueue) = MTQ $ existingQueue Seq.|> (meta, quantity)
+
+
+pushMTQ :: 
+  -- | The existing queue
+  MTQ m 
+  -- | The queue to append as the new tail
+  -> MTQ m
+  -- | The resulting queue 
+  -> MTQ m
+pushMTQ (MTQ existingQueue) (MTQ newTail)  = MTQ $ existingQueue Seq.>< newTail 
 
 -- pop 3 [("foo", 1), ("bar", 5), ("qux", 10)] == [("foo", 1), ("bar", 2)]
 take :: Integer -> MTQ m -> MTQ m
