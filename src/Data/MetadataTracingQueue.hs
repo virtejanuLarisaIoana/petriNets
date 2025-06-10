@@ -20,20 +20,28 @@ module Data.MetadataTracingQueue (
     fromList,
     toListMTQ, 
     reRoot,
-    push
+    push, 
+    findRecall
 ) where
 
-import Data.Sequence (Seq, (<|))
+import Data.Sequence (Seq, (<|), )
 import qualified Data.Sequence as Seq
 import qualified Data.Sequence.Internal as Seqi
 import Prelude hiding (drop, null, take)
 import Data.Tree
+
 
 {- | A FIFO queue holding a single semantic "type" of object
 (i.e., a petri net token of a particular type) where multiple objects can share metadata.
 -}
 newtype MTQ metadata = MTQ {metadata :: Seq.Seq (Tree metadata, Integer)}
   deriving (Eq, Show)
+
+findRecall :: (metadata -> Bool) -> MTQ metadata -> [Int]
+findRecall predicate  (MTQ m) = Seq.findIndicesL f m 
+  where 
+    f (t, _i) = foldTree (\metadata subForestBools -> predicate metadata || or subForestBools) t 
+
 
 
 fromList :: [(Tree metadata, Integer)] -> MTQ metadata

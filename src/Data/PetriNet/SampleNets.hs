@@ -7,6 +7,9 @@ import Data.Sequence (Seq, (<|))
 import Data.MetadataTracingQueue as MTQ
 import Data.MetadataTracingQueue (MTQ)
 import Data.Tree
+import Data.Time.Clock (UTCTime(..), secondsToDiffTime)
+import Data.Time.Calendar
+import Data.Time (addUTCTime, nominalDay)
 
 
 genericTestToken0 :: (String, Integer)
@@ -109,3 +112,88 @@ testNet1 =
                     , ("P5", TokensMD $ Map.fromList [])
                     ]
         }
+
+
+
+seitanFactory :: PetriNet (Transition, UTCTime)
+seitanFactory =
+    PetriNet
+        { places = ["P-GlutenFactory", "P-RawIngredients", "P-FilteringStation", "P-WaterTank", "P-PackageManufacturer", "P-PackageStorage", "P-Staging", "P-Finished", "P-StoreA", "P-StoreB"]
+        , transitions = [initalTransition,"T-BuyGluten", "T-FilterWater", "T-BuyPackaging", "T-Mix", "T-Pack", "T-Cook", "T-Distribute"]
+        , inputArcs =
+            [ InputArc{placeI = "P-GlutenFactory", transitionI = "T-BuyGluten", tokenI = Tokens $ Map.fromList [("Gluten-kg", 100)]}
+            , InputArc{placeI = "P-FilteringStation", transitionI = "T-FilterWater", tokenI = Tokens $ Map.fromList [("Water-liters", 100)]}
+            , InputArc{placeI = "P-PackageManufacturer", transitionI = "T-BuyPackaging", tokenI = Tokens $ Map.fromList [("Packaging-piece", 2000)]}
+            , InputArc{placeI = "P-RawIngredients", transitionI = "T-Mix", tokenI = Tokens $ Map.fromList [("Gluten-kg", 25)]}
+            , InputArc{placeI = "P-WaterTank", transitionI = "T-Mix", tokenI = Tokens $ Map.fromList [("Water-liters", 25)]}
+            , InputArc{placeI = "P-PackageStorage", transitionI = "T-Pack", tokenI = Tokens $ Map.fromList [("Packaging-piece", 30)]}
+            , InputArc{placeI = "P-Staging", transitionI = "T-Pack", tokenI = Tokens $ Map.fromList [("unpackedDough-piece", 25)]}
+            , InputArc{placeI = "P-Staging", transitionI = "T-Cook", tokenI = Tokens $ Map.fromList [("packedDough-piece", 50)]}
+            , InputArc{placeI = "P-Finished", transitionI = "T-Distribute", tokenI = Tokens $ Map.fromList [("Seitan-piece", 50)]}
+            ]
+        , outputArcs =
+            [ OutputArc{transitionO = "T-BuyGluten", placeO = "P-RawIngredients", tokenO = Tokens $ Map.fromList [("Gluten-kg", 100)]}
+            , OutputArc{transitionO = "T-FilterWater", placeO = "P-WaterTank", tokenO = Tokens $ Map.fromList [("Water-liters", 1)]}
+            , OutputArc{transitionO = "T-BuyPackaging", placeO = "P-PackageStorage", tokenO = Tokens $ Map.fromList [("Packaging-piece", 2000)]} 
+            , OutputArc{transitionO = "T-Mix", placeO = "P-Staging", tokenO = Tokens $ Map.fromList [("unpackedDough-piece", 50)]}
+            , OutputArc{transitionO = "T-Pack", placeO = "P-Staging", tokenO = Tokens $ Map.fromList [("packedDough-piece", 25)]}
+            , OutputArc{transitionO = "T-Cook", placeO = "P-Finished", tokenO = Tokens $ Map.fromList [("Seitan-piece", 50)]}
+            , OutputArc{transitionO = "T-Distribute", placeO = "P-StoreA", tokenO = Tokens $ Map.fromList [("Seitan-piece", 25)]}
+            , OutputArc{transitionO = "T-Distribute", placeO = "P-StoreB", tokenO = Tokens $ Map.fromList [("Seitan-piece", 25)]}
+            ]
+        , marking =
+            Marking $
+                Map.fromList
+                    [ ("P-GlutenFactory", TokensMD $ Map.fromList [("Gluten-kg", MTQ.fromList[(Node (initalTransition, time1) [], 3000)] )])
+                    , ("P-RawIngredients", TokensMD $ Map.fromList[])
+                    , ("P-FilteringStation", TokensMD $ Map.fromList [("Water-liters", MTQ.fromList[(Node (initalTransition, time2) [], 1000)])])
+                    , ("P-WaterTank", TokensMD $ Map.fromList [])
+                    , ("P-PackageManufacturer", TokensMD $ Map.fromList [("Packaging-piece", MTQ.fromList[(Node (initalTransition, time3) [], 5000)])])
+                    , ("P-PackageStorage", TokensMD $ Map.fromList [])
+                    , ("P-Staging", TokensMD $ Map.fromList [])
+                    , ("P-Finished", TokensMD $ Map.fromList [])
+                    , ("P-StoreA", TokensMD $ Map.fromList [])
+                    , ("P-StoreB", TokensMD $ Map.fromList [])
+                    ]
+        }
+
+seitanOrder :: [(Transition, UTCTime)]
+seitanOrder = [(buyGluten, addUTCTime (60 * 60) time1 ), (filterWater, addUTCTime (60 * 60) time2), (buyPackaging, addUTCTime (60 * 60) time3), (mix, addUTCTime (60 * 60 * 2 ) time2), (pack, addUTCTime (60 * 60 * 3 ) time2), (pack, addUTCTime (60 * 60 * 3.5 ) time2), (cook, addUTCTime (60 * 60 * 4 ) time2), (distribute, addUTCTime (60 * 60 * 5 ) time2)]
+
+buyGluten :: Transition
+buyGluten = "T-BuyGluten"
+
+filterWater ::Transition
+filterWater = "T-FilterWater"
+
+buyPackaging ::Transition
+buyPackaging="T-BuyPackaging"
+
+mix::Transition 
+mix= "T-Mix"
+
+pack :: Transition
+pack= "T-Pack"
+
+cook :: Transition
+cook = "T-Cook"
+
+initalTransition :: Transition
+initalTransition = "T1"
+
+distribute :: Transition 
+distribute = "T-Distribute"
+
+
+-- 8:00  (UTC), 9 june 2025
+time1 :: UTCTime
+time1 = UTCTime (fromGregorian 2025 6 9) (secondsToDiffTime (8 * 3600))
+
+
+-- 9:00  (UTC), 9 june 2025
+time2 :: UTCTime
+time2 = UTCTime (fromGregorian 2025 6 9) (secondsToDiffTime (9 * 3600))
+
+-- 13:00 (1 PM) UTC, 8 june 2025
+time3 :: UTCTime
+time3 = UTCTime (fromGregorian 2025 6 8) (secondsToDiffTime (13 * 3600))

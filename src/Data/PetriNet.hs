@@ -10,6 +10,8 @@ import Data.List
 import Data.Tree
 import Data.Time.Clock (UTCTime(..), secondsToDiffTime)
 import Data.Time.Calendar
+import Data.Time (addUTCTime, nominalDay)
+import qualified Data.ByteString as Seq
 
 type Place = String
 type Transition = String
@@ -113,13 +115,7 @@ preSetArcs net@(PetriNet places tranz inputArcs outArcs marking) t = [arc | arc 
 -- | The list of arcs that connect the transition to its postset
 postSetArcs :: PetriNet metadata -> Transition -> [OutputArc]
 postSetArcs net@(PetriNet places tranz inputArcs outArcs marking) t = [arc | arc <- outArcs, transitionO arc == t, t `elem` tranz]
-{-
-fireTransition :: PetriNet metadata -> Transition -> Maybe (PetriNet metadata)
-fireTransition net@(PetriNet places tranz inputArcs outArcs marking) t =
-    case isEnabled net t of
-        Just True -> Just (transitionPostSetAddition (transitionPresetSubtract net t) t)
-        _ -> Nothing
--}
+
 {- | Shifts the single token type and amount from the right map 
 into the lefty map.
 This is a fold function for Map.foldrWithKey'
@@ -297,10 +293,28 @@ transitionPostSetShift meta net@(PetriNet{marking = oldMarking}) t =
 placeholderTime :: UTCTime
 placeholderTime = UTCTime (fromGregorian 2025 6 5) (secondsToDiffTime 3600)  -- 2025-06-05 01:00:00
 
-fireTaggedTransition :: PetriNet (Transition, UTCTime )-> Transition->  PetriNet (Transition, UTCTime)
-fireTaggedTransition net t = case isEnabled net t of
-    Nothing -> error "Transition not enabled"
-    _ ->  transitionPostSetShift (t, placeholderTime) net t
-    
-fireTaggedSequence :: PetriNet (Transition, UTCTime) -> PetriNet (Transition, UTCTime)
-fireTaggedSequence net@(PetriNet places tranz inputArcs outArcs marking) = foldl fireTaggedTransition net tranz 
+fireTaggedTransition :: PetriNet (Transition, UTCTime )-> (Transition, UTCTime)->  PetriNet (Transition, UTCTime)
+fireTaggedTransition net (t, time) = case isEnabled net t of
+    Nothing -> error $ "Transition (" <> show t <> ") not enabled."
+    _ ->    transitionPostSetShift (t, time) net t
+
+
+
+fireTaggedSequence :: PetriNet (Transition, UTCTime) -> [(Transition, UTCTime)] -> PetriNet (Transition, UTCTime)
+fireTaggedSequence net order = foldl fireTaggedTransition net order
+
+
+recalledTokensIndices :: (metadata -> Bool) -> TokensMD metadata -> Map String [Int]
+recalledTokensIndices predicate tokens = findRecall predicate <$> tokensMDMap tokens
+
+recalledNetIndices :: (metadata -> Bool) -> PetriNet metadata -> Map Place (Map String [Int])
+recalledNetIndices predicate (PetriNet{marking = marking'}) = recalledTokensIndices predicate <$> getMarking marking'
+
+--showMetadata :: PetriNet (Transition, UTCTime)  -> String
+showMetadata:: PetriNet (Transition, UTCTime) -> Place -> String -> String
+showMetadata net@(PetriNet _places _tranz _inputArcs _outArcs marking') place tokentype =
+    let 
+        tokenMap = tokensMDMap $ getMarking marking' Map.! place
+        tokenQueue = tokenMap Map.! tokentype
+    in       
+    drawForest $ fmap show . fst <$> toListMTQ tokenQueue
